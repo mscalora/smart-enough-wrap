@@ -42,8 +42,9 @@ const validateInput = (text, options) => {
     config.errorChar = config.errorChar.split("")[0]
 
     // errorChar must not be wide character
-    if (wcwidth(config.errorChar) > 1)
+    if (wcwidth(config.errorChar) > 1) {
       throw new Error(`Error character cannot be a wide character (${config.errorChar})`)
+    }
   }
 
   // make sure correct sign on padding
@@ -169,6 +170,7 @@ const wrap = (input, options) => {
 
 const splitAnsiInput = (text) => {
   // get start and end positions for matches
+  let result
   let matches = []
   let textArr = [...text]
   let textLength = textArr.length
@@ -185,7 +187,9 @@ const splitAnsiInput = (text) => {
   /* eslint-enable */
 
 
-  if (matches.length < 1) return [] // we have no ANSI escapes, we're done here
+  if (matches.length < 1) {
+    return [] // we have no ANSI escapes, we're done here
+  }
 
   // add start and end positions for non matches
   matches = matches.reduce((prev, curr) => {
@@ -220,14 +224,30 @@ const splitAnsiInput = (text) => {
   }
 
 
-  let savedArr = matches.map(match => {
+  let savedArr = flat(matches.map(match => {
     let value = text.substring(match.start, match.end)
     return (match.expand) ? [...value] : [value]
-  }).flat(2)
+  }), 2)
 
   return savedArr
 }
 
+function flat(array, depth) {
+  return [...flatten(array, depth)]
+}
+
+function* flatten (array, depth) {
+  if(depth === undefined) {
+    depth = 1
+  }
+  for(const item of array) {
+    if(Array.isArray(item) && depth > 0) {
+      yield* flatten(item, depth - 1)
+    } else {
+      yield item
+    }
+  }
+}
 
 const restoreANSI = (savedArr, processedArr) => {
   return processedArr.map((char) => {
@@ -241,14 +261,16 @@ const restoreANSI = (savedArr, processedArr) => {
       result = savedArr.splice(0, splicePoint)
     }
 
-    // add all following, consecutive closing tags in case linebreak inerted next
+    // add all following, consecutive closing tags in case linebreak inserted next
     const ANSIClosePattern = "^\\x1b\\[([0-9]+)*m"
     const ANSICloseRegex = new RegExp(ANSIClosePattern) // eslint-disable-line no-control-regex
     const closeCodes = ["0", "21", "22", "23", "24", "25", "27", "28", "29", "39", "49", "54", "55"]
 
     let match
     while (savedArr.length && (match = savedArr[0].match(ANSICloseRegex))) {
-      if (!closeCodes.includes(match[1])) break
+      if (!closeCodes.includes(match[1])) {
+        break
+      }
       result.push(savedArr.shift())
     }
 
@@ -283,5 +305,5 @@ module.exports = (input, options) => {
     return outArr
   })
 
-  return processedLines.flat(2).join("\n")
+  return flat(processedLines, 2).join("\n")
 }
